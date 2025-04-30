@@ -30,7 +30,7 @@ class ClientOptions(TypedDict, total=False):
     env_args: Optional[Args]
 
 
-class TRPError(Exception):
+class Error(Exception):
     """Custom error for TRP operations"""
     def __init__(self, message: str, data: Any = None):
         self.message = message
@@ -38,7 +38,7 @@ class TRPError(Exception):
         super().__init__(f"{message}: {data}" if data else message)
 
 
-class TRPClient:
+class Client:
     def __init__(self, options: Dict[str, Any]):
         self.options = self._validate_options(options)
         self.client = httpx.AsyncClient()
@@ -110,25 +110,25 @@ class TRPClient:
             
             # Handle possible error
             if 'error' in result:
-                raise TRPError(
+                raise Error(
                     result['error'].get('message', 'Unknown error'),
                     result['error'].get('data')
                 )
                 
             # Return result
             if 'result' not in result:
-                raise TRPError("No result found in response")
+                raise Error("No result found in response")
                 
             return result['result']
             
         except httpx.HTTPStatusError as e:
-            raise TRPError(f"HTTP Error {e.response.status_code}", e.response.text)
+            raise Error(f"HTTP Error {e.response.status_code}", e.response.text)
         except httpx.RequestError as e:
-            raise TRPError(f"Network error", str(e))
+            raise Error(f"Network error", str(e))
         except json.JSONDecodeError as e:
-            raise TRPError("Error decoding JSON response", str(e))
+            raise Error("Error decoding JSON response", str(e))
         except Exception as e:
-            raise TRPError(f"Unknown error", str(e))
+            raise Error(f"Unknown error", str(e))
             
     async def close(self):
         """Closes the underlying HTTP client"""
