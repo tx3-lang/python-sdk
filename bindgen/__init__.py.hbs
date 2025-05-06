@@ -20,12 +20,12 @@ DEFAULT_ENV_ARGS = {
 
 {{#each transactions}}
 @dataclass
-class {{params_name}}:
+class {{pascalCase params_name}}:
 {{#each parameters}}
-    {{name}}: {{type_name}}
+    {{camelCase name}}: {{type_name}}
 {{/each}}
 
-{{constant_name}} = {
+{{constantCase constant_name}} = {
     "bytecode": "{{ir_bytes}}",
     "encoding": "hex",
     "version": "v1alpha1",
@@ -37,9 +37,9 @@ class Client:
         self._client = TRPClient(options)
 {{#each transactions}}
 
-    async def {{function_name}}(self, args: {{params_name}}) -> TxEnvelope:
+    async def {{snakeCase function_name}}(self, args: {{pascalCase params_name}}) -> TxEnvelope:
         return await self._client.resolve({
-            "tir": {{constant_name}},
+            "tir": {{constantCase constant_name}},
             "args": vars(args),
         })
 {{/each}}
