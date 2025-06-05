@@ -61,6 +61,15 @@ class Client:
             
         return validated
 
+    def _handle_args(self, args):
+        def convert(value):
+            if isinstance(value, bytes):
+                return '0x' + value.hex()
+            return value
+
+        return { k: convert(v) for k, v in args.items() }
+
+
     async def resolve(self, proto_tx: Dict[str, Any]) -> TxEnvelope:
         """
         Resolves a transaction by sending it to the TRP server
@@ -88,7 +97,7 @@ class Client:
             "method": "trp.resolve",
             "params": {
                 "tir": proto_tx.get("tir"),
-                "args": proto_tx.get("args"),
+                "args": self._handle_args(proto_tx.get("args")),
                 "env": self.options.get("env_args")
             },
             "id": str(uuid.uuid4())
