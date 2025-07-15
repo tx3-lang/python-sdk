@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Any, Union, TypedDict
+from typing import Dict, Optional, Any, Union, TypedDict, List
 import httpx
 import json
 import uuid
@@ -18,6 +18,11 @@ class ProtoTx(TypedDict):
     args: Args
 
 
+class BytesEnvelope(TypedDict):
+    content: str
+    encoding: str  # "base64" | "hex" | str
+
+
 class TxEnvelope(TypedDict):
     tx: str
     bytes: Optional[str]
@@ -28,6 +33,21 @@ class ClientOptions(TypedDict, total=False):
     endpoint: str
     headers: Optional[Dict[str, str]]
     env_args: Optional[Args]
+
+
+class SubmitWitness(TypedDict):
+    type: str
+    key: BytesEnvelope
+    signature: BytesEnvelope
+
+
+class SubmitParams(TypedDict):
+    tx: BytesEnvelope
+    witnesses: List[SubmitWitness]
+
+
+class SubmitResponse(TypedDict):
+    hash: str
 
 
 class Error(Exception):
@@ -100,6 +120,71 @@ class Client:
                 "args": self._handle_args(proto_tx.get("args")),
                 "env": self.options.get("env_args")
             },
+            "id": str(uuid.uuid4())
+        }
+        
+        try:
+            # Send request
+            response = await self.client.post(
+                self.options['endpoint'],
+                headers=headers,
+                json=body
+            )
+            
+            # Verify if the response is successful
+            response.raise_for_status()
+            
+            # Parse response
+            result = response.json()
+            
+            # Handle possible error
+            if 'error' in result:
+                raise Error(
+                    result['error'].get('message', 'Unknown error'),
+                    result['error'].get('data')
+                )
+                
+            # Return result
+            if 'result' not in result:
+                raise Error("No result found in response")
+                
+            return result['result']
+            
+        except httpx.HTTPStatusError as e:
+            raise Error(f"HTTP Error {e.response.status_code}", e.response.text)
+        except httpx.RequestError as e:
+            raise Error(f"Network error", str(e))
+        except json.JSONDecodeError as e:
+            raise Error("Error decoding JSON response", str(e))
+        except Exception as e:
+            raise Error(f"Unknown error", str(e))
+            
+    async def submit(self, params: SubmitParams) -> SubmitResponse:
+        """
+        Submit transaction by sending it to the TRP server
+        
+        Args:
+            params: The transaction with its signatures.
+            
+        Returns:
+            SubmitResponse: Hash of the transaction
+            
+        Raises:
+            TRPError: If there is any error submiting the transaction
+        """
+        # Prepare headers
+        headers = {
+            "Content-Type": "application/json",
+        }
+        
+        if self.options.get('headers'):
+            headers.update(self.options['headers'])
+            
+        # Prepare body
+        body = {
+            "jsonrpc": "2.0",
+            "method": "trp.submit",
+            "params": params,
             "id": str(uuid.uuid4())
         }
         

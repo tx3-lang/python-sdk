@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Dict, Any
-from tx3_sdk.trp import Client as TRPClient, TxEnvelope
+from tx3_sdk.trp import Client as TRPClient, TxEnvelope, SubmitResponse, SubmitParams
 
 DEFAULT_TRP_ENDPOINT = "{{trpEndpoint}}"
 
@@ -43,6 +43,9 @@ class Client:
             "args": vars(args),
         })
 {{/each}}
+
+    async def submit(self, params: SubmitParams) -> SubmitResponse:
+        return await self._client.submit(params)
 
 # Create a default client instance
 protocol = Client({
