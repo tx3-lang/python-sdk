@@ -22,7 +22,7 @@ DEFAULT_ENV_ARGS = {
 @dataclass
 class {{pascalCase params_name}}:
 {{#each parameters}}
-    {{snakeCase name}}: {{type_name}}
+    {{snakeCase name}}: {{typeFor type_name "python"}} # {{type_name}}
 {{/each}}
 
 {{constantCase constant_name}} = {
