@@ -9,7 +9,7 @@ Args = Dict[str, ArgValue]
 
 class TirEnvelope(TypedDict):
     version: str
-    bytecode: str
+    content: str
     encoding: str  # "base64" | "hex" | str
 
 
@@ -43,7 +43,7 @@ class SubmitWitness(TypedDict):
 
 class SubmitParams(TypedDict):
     tx: BytesEnvelope
-    witnesses: List[SubmitWitness]
+    witnesses: List[Union[SubmitWitness, str]]
 
 
 class SubmitResponse(TypedDict):
