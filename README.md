@@ -8,6 +8,8 @@ defining and executing UTxO-based blockchain transactions declaratively. Load a
 compiled `.tii` protocol, bind parties and signers, and drive the full
 transaction lifecycle (`resolve -> sign -> submit -> wait`) through TRP.
 
+This repository is organized as a monorepo. The publishable Python package lives in `sdk/`.
+
 ## Installation
 
 ```bash
