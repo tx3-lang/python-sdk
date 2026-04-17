@@ -26,17 +26,18 @@ class CardanoSigner:
     """Cardano signer derived at path `m/1852'/1815'/0'/0/0`."""
 
     _address: str
-    _signing_key: SigningKey
     _public_key: bytes
+    _signing_key: SigningKey | None = None
+    _extended_secret: bytes | None = None
 
     @classmethod
     def from_mnemonic(cls, address: str, phrase: str) -> "CardanoSigner":
         """Creates signer by deriving keys from a BIP39 mnemonic phrase."""
-        private_key, public_key = _derive_keypair_from_mnemonic(phrase)
+        extended_secret, public_key = _derive_keypair_from_mnemonic(phrase)
         signer = cls(
             _address=address,
-            _signing_key=SigningKey(private_key),
             _public_key=public_key,
+            _extended_secret=extended_secret,
         )
         signer._verify_address_binding()
         return signer
@@ -55,8 +56,8 @@ class CardanoSigner:
         signing_key = SigningKey(raw)
         signer = cls(
             _address=address,
-            _signing_key=signing_key,
             _public_key=bytes(signing_key.verify_key),
+            _signing_key=signing_key,
         )
         signer._verify_address_binding()
         return signer
@@ -73,6 +74,16 @@ class CardanoSigner:
             raise InvalidHashError("invalid hash: hex decode failed") from exc
         if len(tx_hash) != 32:
             raise InvalidHashError(f"invalid hash: expected 32 bytes, got {len(tx_hash)}")
+        if self._extended_secret is not None:
+            signature = _extended_sign(self._extended_secret, self._public_key, tx_hash)
+            return vkey_witness(
+                public_key_hex=self._public_key.hex(),
+                signature_hex=signature.hex(),
+            )
+
+        if self._signing_key is None:
+            raise InvalidPrivateKeyError("invalid private key: signer is not initialized")
+
         signed = self._signing_key.sign(tx_hash)
         return vkey_witness(
             public_key_hex=self._public_key.hex(),
@@ -92,7 +103,7 @@ def _derive_keypair_from_mnemonic(phrase: str) -> tuple[bytes, bytes]:
         raise InvalidMnemonicError("invalid mnemonic: expected at least 12 words")
 
     try:
-        from bip_utils import Bip39MnemonicValidator, Bip39SeedGenerator, Bip44Changes, Cip1852, Cip1852Coins
+        from bip_utils import Bip39MnemonicValidator, CardanoIcarusBip32, CardanoIcarusSeedGenerator
     except Exception as exc:  # pragma: no cover - import failure path
         raise InvalidMnemonicError(f"invalid mnemonic: bip-utils unavailable ({exc})") from exc
 
@@ -100,30 +111,55 @@ def _derive_keypair_from_mnemonic(phrase: str) -> tuple[bytes, bytes]:
     if not validator.IsValid(phrase):
         raise InvalidMnemonicError("invalid mnemonic phrase")
 
-    seed = Bip39SeedGenerator(phrase).Generate()
-    ctx = Cip1852.FromSeed(seed, Cip1852Coins.CARDANO_ICARUS)
-    node = ctx.Purpose().Coin().Account(0).Change(Bip44Changes.CHAIN_EXT).AddressIndex(0)
-    private_key_obj = node.PrivateKey()
-    public_key_obj = node.PublicKey()
-    key_bytes = _extract_key_bytes(private_key_obj)
-    public_key = _extract_public_key_bytes(public_key_obj)
-    if len(key_bytes) < 32:
-        raise InvalidPrivateKeyError("invalid private key: derived key too short")
+    hardened = 0x80000000
 
-    candidates = []
-    if len(key_bytes) >= 32:
-        candidates.append(key_bytes[:32])
-    if len(key_bytes) >= 64:
-        candidates.append(key_bytes[32:64])
+    seed = CardanoIcarusSeedGenerator(phrase).Generate()
+    node = (
+        CardanoIcarusBip32.FromSeed(seed)
+        .ChildKey(hardened | 1852)
+        .ChildKey(hardened | 1815)
+        .ChildKey(hardened | 0)
+        .ChildKey(0)
+        .ChildKey(0)
+    )
 
-    for candidate in candidates:
-        try:
-            if bytes(SigningKey(candidate).verify_key) == public_key:
-                return candidate, public_key
-        except Exception:
-            continue
+    extended_secret = _extract_key_bytes(node.PrivateKey())
+    public_key = _extract_public_key_bytes(node.PublicKey())
 
-    return key_bytes[:32], public_key
+    if len(extended_secret) != 64:
+        raise InvalidPrivateKeyError(
+            f"invalid private key: expected 64-byte extended secret, got {len(extended_secret)}"
+        )
+
+    return extended_secret, public_key
+
+
+def _extended_sign(extended_secret: bytes, public_key: bytes, message: bytes) -> bytes:
+    if len(extended_secret) != 64:
+        raise InvalidPrivateKeyError("invalid private key: expected 64-byte extended secret")
+
+    try:
+        from bip_utils.ecc.ed25519.lib import ed25519_lib
+    except Exception as exc:  # pragma: no cover - import failure path
+        raise InvalidPrivateKeyError(f"invalid private key: signing backend unavailable ({exc})") from exc
+
+    group_order = 2**252 + 27742317777372353535851937790883648493
+
+    r_digest = hashlib.sha512(extended_secret[32:] + message).digest()
+    r = int.from_bytes(ed25519_lib.scalar_reduce(r_digest), "little")
+    r_point = ed25519_lib.point_scalar_mul_base(r)
+
+    hram_digest = hashlib.sha512(r_point + public_key + message).digest()
+    hram = int.from_bytes(ed25519_lib.scalar_reduce(hram_digest), "little")
+
+    left = bytearray(extended_secret[:32])
+    left[0] &= 0xF8
+    left[31] &= 0x3F
+    left[31] |= 0x40
+    a = int.from_bytes(left, "little")
+
+    s = (r + (hram * a)) % group_order
+    return r_point + s.to_bytes(32, "little")
 
 
 def _extract_key_bytes(key_obj: Any) -> bytes:
