@@ -34,10 +34,10 @@ jobs:
 
       - name: Run unit tests
         working-directory: ./sdk
-        run: pytest tests -m "not integration"
+        run: pytest tests -m "not e2e"
 
-  integration:
-    name: integration
+  e2e:
+    name: e2e
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -64,15 +64,15 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .[dev]
 
-      - name: Validate integration secrets
+      - name: Validate e2e secrets
         run: |
           for name in TRP_ENDPOINT_PREPROD TRP_API_KEY_PREPROD TEST_PARTY_A_ADDRESS TEST_PARTY_A_MNEMONIC TEST_PARTY_B_ADDRESS TEST_PARTY_B_MNEMONIC; do
             if [ -z "${!name}" ]; then
-              echo "Missing required integration env var: $name"
+              echo "Missing required e2e env var: $name"
               exit 1
             fi
           done
 
-      - name: Run integration tests
+      - name: Run e2e tests
         working-directory: ./sdk
-        run: pytest tests/integration -m integration
+        run: pytest tests/e2e -m e2e

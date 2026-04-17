@@ -108,12 +108,12 @@ class MySigner(Signer):
 ## Testing
 
 - Tests follow Python's idiomatic centralized layout under `sdk/tests/`.
-- Integration tests are marked with `@pytest.mark.integration` and selected by marker.
+- End-to-end (e2e) tests are marked with `@pytest.mark.e2e` and selected by marker.
 
 ```bash
 # from python-sdk/sdk
-pytest -m "not integration"
-pytest tests/integration -m integration
+pytest -m "not e2e"
+pytest tests/e2e -m e2e
 ```
 
 ## License

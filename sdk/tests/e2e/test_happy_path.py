@@ -8,13 +8,13 @@ from tx3_sdk import CardanoSigner, Party, PollConfig, Protocol, TrpClient, Tx3Cl
 def _require_env(name: str) -> str:
     value = os.getenv(name)
     if not value:
-        pytest.skip(f"{name} not set, skipping integration test")
+        pytest.skip(f"{name} not set, skipping e2e test")
     return value
 
 
 @pytest.mark.asyncio
-@pytest.mark.integration
-async def test_integration_happy_path() -> None:
+@pytest.mark.e2e
+async def test_e2e_happy_path() -> None:
     endpoint = _require_env("TRP_ENDPOINT_PREPROD")
     api_key = os.getenv("TRP_API_KEY_PREPROD", "")
     party_a_address = _require_env("TEST_PARTY_A_ADDRESS")
