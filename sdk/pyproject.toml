@@ -40,6 +40,9 @@ tx3_sdk = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+  "integration: marks tests that require a live TRP endpoint",
+]
 
 [tool.ruff]
 line-length = 100

@@ -13,6 +13,7 @@ def _require_env(name: str) -> str:
 
 
 @pytest.mark.asyncio
+@pytest.mark.integration
 async def test_integration_happy_path() -> None:
     endpoint = _require_env("TRP_ENDPOINT_PREPROD")
     api_key = os.getenv("TRP_API_KEY_PREPROD", "")

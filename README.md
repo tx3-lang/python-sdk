@@ -105,6 +105,17 @@ class MySigner(Signer):
 - TRP protocol version: `v1beta0`
 - TII schema version: `v1beta0`
 
+## Testing
+
+- Tests follow Python's idiomatic centralized layout under `sdk/tests/`.
+- Integration tests are marked with `@pytest.mark.integration` and selected by marker.
+
+```bash
+# from python-sdk/sdk
+pytest -m "not integration"
+pytest tests/integration -m integration
+```
+
 ## License
 
 Apache-2.0

@@ -34,7 +34,7 @@ jobs:
 
       - name: Run unit tests
         working-directory: ./sdk
-        run: pytest tests --ignore=tests/test_integration.py
+        run: pytest tests -m "not integration"
 
   integration:
     name: integration
@@ -75,4 +75,4 @@ jobs:
 
       - name: Run integration tests
         working-directory: ./sdk
-        run: pytest tests/test_integration.py
+        run: pytest tests/integration -m integration
