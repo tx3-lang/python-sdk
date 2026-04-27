@@ -6,7 +6,7 @@ from tx3_sdk.facade.party import Party
 from tx3_sdk.facade.poll import PollConfig
 from tx3_sdk.signer.cardano import CardanoSigner
 from tx3_sdk.signer.ed25519 import Ed25519Signer
-from tx3_sdk.signer.signer import Signer
+from tx3_sdk.signer.signer import SignRequest, Signer
 from tx3_sdk.tii.protocol import Protocol
 from tx3_sdk.trp.client import TrpClient
 
@@ -17,6 +17,7 @@ __all__ = [
     "Party",
     "PollConfig",
     "Protocol",
+    "SignRequest",
     "Signer",
     "TrpClient",
     "Tx3Client",

@@ -26,7 +26,7 @@ class MockSigner:
     def address(self) -> str:
         return self._address
 
-    def sign(self, tx_hash_hex: str):
+    def sign(self, _request):
         from tx3_sdk.trp.spec import TxWitness
 
         return TxWitness(

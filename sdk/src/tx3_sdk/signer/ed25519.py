@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from nacl.signing import SigningKey
 
 from tx3_sdk.signer.errors import InvalidHashError, InvalidMnemonicError, InvalidPrivateKeyError
+from tx3_sdk.signer.signer import SignRequest
 from tx3_sdk.signer.witness import vkey_witness
 from tx3_sdk.trp.spec import TxWitness
 
@@ -48,10 +49,10 @@ class Ed25519Signer:
         """Returns the signer address."""
         return self._address
 
-    def sign(self, tx_hash_hex: str) -> TxWitness:
-        """Signs a 32-byte tx hash hex string and returns a `vkey` witness."""
+    def sign(self, request: SignRequest) -> TxWitness:
+        """Signs the request's tx hash and returns a `vkey` witness."""
         try:
-            tx_hash = bytes.fromhex(tx_hash_hex)
+            tx_hash = bytes.fromhex(request.tx_hash_hex)
         except ValueError as exc:
             raise InvalidHashError("invalid hash: hex decode failed") from exc
         if len(tx_hash) != 32:

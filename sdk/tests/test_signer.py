@@ -10,7 +10,12 @@ from tx3_sdk.signer import (
     InvalidHashError,
     InvalidMnemonicError,
     InvalidPrivateKeyError,
+    SignRequest,
 )
+
+
+def _req(tx_hash_hex: str) -> SignRequest:
+    return SignRequest(tx_hash_hex=tx_hash_hex, tx_cbor_hex="")
 
 
 def test_ed25519_signer_from_hex_signs_known_hash() -> None:
@@ -18,7 +23,7 @@ def test_ed25519_signer_from_hex_signs_known_hash() -> None:
     signer = Ed25519Signer.from_hex("addr_test1qz...", seed_hex)
     tx_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
-    witness = signer.sign(tx_hash)
+    witness = signer.sign(_req(tx_hash))
     assert witness.type == "vkey"
 
     vk = VerifyKey(bytes.fromhex(witness.key.content))
@@ -36,7 +41,7 @@ def test_ed25519_invalid_hash_length() -> None:
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
     )
     with pytest.raises(InvalidHashError):
-        signer.sign("aabb")
+        signer.sign(_req("aabb"))
 
 
 def test_cardano_signer_from_hex_with_bound_address() -> None:
@@ -49,7 +54,7 @@ def test_cardano_signer_from_hex_with_bound_address() -> None:
     address = bech32_encode("addr_test", words)
 
     signer = CardanoSigner.from_hex(address=address, private_key_hex=seed.hex())
-    witness = signer.sign("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+    witness = signer.sign(_req("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"))
     assert witness.type == "vkey"
 
 

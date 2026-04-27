@@ -10,7 +10,7 @@ from tx3_sdk.signer.errors import (
     InvalidPrivateKeyError,
     UnsupportedPaymentCredentialError,
 )
-from tx3_sdk.signer.signer import Signer
+from tx3_sdk.signer.signer import SignRequest, Signer
 from tx3_sdk.signer.witness import TxWitness
 
 __all__ = [
@@ -21,6 +21,7 @@ __all__ = [
     "InvalidHashError",
     "InvalidMnemonicError",
     "InvalidPrivateKeyError",
+    "SignRequest",
     "Signer",
     "TxWitness",
     "UnsupportedPaymentCredentialError",
