@@ -1,14 +1,20 @@
 # tx3-sdk (Python)
 
 [![PyPI](https://img.shields.io/pypi/v/tx3-sdk.svg)](https://pypi.org/project/tx3-sdk/)
+[![CI](https://github.com/tx3-lang/python-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/tx3-lang/python-sdk/actions/workflows/ci.yml)
+[![Tx3 docs](https://img.shields.io/badge/Tx3-docs-blue.svg)](https://docs.txpipe.io/tx3)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-The official Python SDK for [Tx3](https://tx3.land): a DSL and protocol suite for
+The official Python SDK for [Tx3](https://docs.txpipe.io/tx3): a DSL and protocol suite for
 defining and executing UTxO-based blockchain transactions declaratively. Load a
 compiled `.tii` protocol, bind parties and signers, and drive the full
 transaction lifecycle (`resolve -> sign -> submit -> wait`) through TRP.
 
 This repository is organized as a monorepo. The publishable Python package lives in `sdk/`.
+
+## What is Tx3
+
+Tx3 is a domain-specific language and protocol suite for declarative, type-safe UTxO transactions. Authors write `.tx3` files describing parties, environment, and transactions; the toolchain compiles them to `.tii` artifacts that this SDK loads at runtime to drive the resolve → sign → submit → wait lifecycle through a TRP server. See the [Tx3 docs](https://docs.txpipe.io/tx3) for project context.
 
 ## Installation
 
@@ -67,7 +73,10 @@ asyncio.run(main())
 | `Tx3Client` | Facade | High-level client holding protocol + TRP + party bindings |
 | `TxBuilder` | Invocation builder | Collects args and resolves transactions |
 | `Party` | Party | `Party.address(...)` or `Party.signer(...)` |
-| `Signer` | Signer | Interface for witness-producing signing implementations |
+| `Signer` | Signer | Protocol producing a `TxWitness` for a `SignRequest` |
+| `SignRequest` | SignRequest | Input passed to `Signer.sign`: `tx_hash_hex` + `tx_cbor_hex` |
+| `CardanoSigner` | Cardano Signer | BIP32-Ed25519 signer at `m/1852'/1815'/0'/0/0` |
+| `Ed25519Signer` | Ed25519 Signer | Generic raw-key Ed25519 signer |
 | `ResolvedTx` | Resolved transaction | Output of `resolve()`, ready for signing |
 | `SignedTx` | Signed transaction | Output of `sign()`, ready for submission |
 | `SubmittedTx` | Submitted transaction | Output of `submit()`, pollable for status |
@@ -87,18 +96,42 @@ envelope = await trp.resolve(ResolveParams(tir=..., args={"quantity": 100}))
 
 ### Custom Signer
 
+Implement the `Signer` protocol. `sign` receives a `SignRequest` carrying both
+the tx hash and the full tx CBOR; hash-based signers read `tx_hash_hex`,
+tx-based signers (e.g. wallet bridges) read `tx_cbor_hex`.
+
 ```python
-from tx3_sdk import Signer
+from tx3_sdk import SignRequest, Signer
 from tx3_sdk.signer import TxWitness
+from tx3_sdk.signer.witness import vkey_witness
 
 
 class MySigner(Signer):
     def address(self) -> str:
         return "addr_test1..."
 
-    def sign(self, tx_hash_hex: str) -> TxWitness:
-        return TxWitness.vkey(public_key_hex="aabb", signature_hex="ccdd")
+    def sign(self, request: SignRequest) -> TxWitness:
+        # sign request.tx_hash_hex with your key
+        return vkey_witness(public_key_hex="aabb", signature_hex="ccdd")
 ```
+
+### Manual witness attachment
+
+When a witness is produced outside any registered signer — for example by an
+external wallet app or a remote signing service — attach it to the `ResolvedTx`
+before `sign()`:
+
+```python
+from tx3_sdk.signer.witness import vkey_witness
+
+witness = vkey_witness(public_key_hex="aabb", signature_hex="ccdd")  # from external wallet
+
+resolved = await client.tx("transfer").arg("quantity", 10_000_000).resolve()
+signed = await resolved.add_witness(witness).sign()
+submitted = await signed.submit()
+```
+
+`add_witness` may be called any number of times; manual witnesses are appended after registered-signer witnesses in attach order. Note: `ResolvedTx` is a frozen dataclass, so `add_witness` returns a new instance.
 
 ## Tx3 protocol compatibility
 
