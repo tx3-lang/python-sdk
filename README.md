@@ -118,15 +118,19 @@ class MySigner(Signer):
 ### Manual witness attachment
 
 When a witness is produced outside any registered signer — for example by an
-external wallet app or a remote signing service — attach it to the `ResolvedTx`
-before `sign()`:
+external wallet app or a remote signing service — resolve the transaction
+first, hand the resolved hash (or full tx CBOR) to the wallet, then attach
+the returned witness before `sign()`:
 
 ```python
 from tx3_sdk.signer.witness import vkey_witness
 
-witness = vkey_witness(public_key_hex="aabb", signature_hex="ccdd")  # from external wallet
-
 resolved = await client.tx("transfer").arg("quantity", 10_000_000).resolve()
+
+# Hand resolved.hash (or resolved.tx_hex) to the external wallet and get
+# back a witness. The wallet needs the resolved tx to sign.
+witness = vkey_witness(public_key_hex="aabb", signature_hex="ccdd")  # sign resolved.hash with external wallet
+
 signed = await resolved.add_witness(witness).sign()
 submitted = await signed.submit()
 ```
