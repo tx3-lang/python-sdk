@@ -32,6 +32,9 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .[dev]
 
+      - name: Setup tx3 toolchain
+        uses: tx3-lang/actions/setup@v1
+
       - name: Run unit tests
         working-directory: ./sdk
         run: pytest tests -m "not e2e"
