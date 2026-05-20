@@ -3,13 +3,11 @@
 # CI artifact — not part of the SDK.
 #
 # Renders the .trix/client-lib codegen plugin against the shared transfer
-# fixture and verifies the result. The subject under test is the Handlebars
-# templates + tx3c integration, not the SDK runtime.
+# fixture and verifies the result the way a consumer would: the rendered module
+# is imported in a fresh venv with the dependencies its generated
+# requirements.txt pins installed — no editable install of the SDK source tree.
 #
-# Steps: invoke `tx3c codegen`, assert the expected file exists, smoke-check
-# the generated surface, and import the output against this repo's SDK.
-#
-# Requires `tx3c` and a `python` with this repo's SDK installed on PATH.
+# Requires `tx3c` and `python` on PATH.
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -21,7 +19,9 @@ tx3c codegen \
   --template "$repo_root/.trix/client-lib" \
   --output "$gen"
 
-test -f "$gen/__init__.py" || { echo "missing generated file: __init__.py"; exit 1; }
+for f in __init__.py requirements.txt; do
+  test -f "$gen/$f" || { echo "missing generated file: $f"; exit 1; }
+done
 
 for sym in \
   'TARGET_TII_VERSION' \
@@ -32,8 +32,12 @@ for sym in \
   grep -qF "$sym" "$gen/__init__.py" || { echo "generated __init__.py missing: $sym"; exit 1; }
 done
 
-# Import the rendered module to confirm it loads against this repo's SDK.
-python -c "
+# Import the rendered module in a fresh venv with the dependencies its generated
+# requirements.txt pins, exactly as an end user would consume it.
+python -m venv "$gen/venv"
+"$gen/venv/bin/pip" install --quiet --upgrade pip
+"$gen/venv/bin/pip" install --quiet -r "$gen/requirements.txt"
+"$gen/venv/bin/python" -c "
 import importlib.util, sys
 spec = importlib.util.spec_from_file_location('tx3_generated_protocol', '$gen/__init__.py')
 module = importlib.util.module_from_spec(spec)

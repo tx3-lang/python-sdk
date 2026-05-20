@@ -51,12 +51,6 @@ jobs:
           cache: pip
           cache-dependency-path: sdk/pyproject.toml
 
-      - name: Install SDK
-        working-directory: ./sdk
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install -e .
-
       - name: Setup tx3 toolchain
         uses: tx3-lang/actions/setup@v1
         with:
