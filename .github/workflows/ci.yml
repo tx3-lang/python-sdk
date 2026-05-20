@@ -36,6 +36,27 @@ jobs:
         working-directory: ./sdk
         run: pytest tests -m "not e2e"
 
+  codegen:
+    name: codegen
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: sdk/pyproject.toml
+
+      - name: Setup tx3 toolchain
+        uses: tx3-lang/actions/setup@v1
+
+      - name: Render and verify codegen plugin
+        run: bash .github/scripts/codegen-check.sh
+
   e2e:
     name: e2e
     runs-on: ubuntu-latest
