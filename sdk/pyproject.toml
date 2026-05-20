@@ -42,7 +42,6 @@ tx3_sdk = ["py.typed"]
 testpaths = ["tests"]
 markers = [
   "e2e: marks tests that require a live TRP endpoint",
-  "codegen: marks the codegen render-fixture test (exercises the templates + tx3c)",
 ]
 
 [tool.ruff]
