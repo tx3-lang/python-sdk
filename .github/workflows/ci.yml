@@ -32,14 +32,39 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .[dev]
 
+      - name: Run unit tests
+        working-directory: ./sdk
+        run: pytest tests -m "not e2e and not codegen"
+
+  codegen:
+    name: codegen
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: sdk/pyproject.toml
+
+      - name: Install dependencies
+        working-directory: ./sdk
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+
       - name: Setup tx3 toolchain
         uses: tx3-lang/actions/setup@v1
         with:
           channel: beta
 
-      - name: Run unit tests
+      - name: Run codegen render-fixture test
         working-directory: ./sdk
-        run: pytest tests -m "not e2e"
+        run: pytest tests -m codegen
 
   e2e:
     name: e2e

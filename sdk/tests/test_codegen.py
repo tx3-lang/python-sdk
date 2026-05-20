@@ -10,6 +10,8 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 
 def _resolve_tx3c() -> str:
     """Locates the tx3c binary: TX3_TX3C_PATH first, then $PATH."""
@@ -22,6 +24,7 @@ def _resolve_tx3c() -> str:
     raise RuntimeError("tx3c not found; set TX3_TX3C_PATH or install tx3c")
 
 
+@pytest.mark.codegen
 def test_codegen_client_lib_renders_and_imports() -> None:
     """Renders the plugin against the shared fixture and imports the result.
 
