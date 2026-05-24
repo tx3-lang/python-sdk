@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from tx3_sdk import CardanoSigner, Party, PollConfig, Protocol, TrpClient, Tx3Client
+from tx3_sdk import CardanoSigner, Party, PollConfig, Protocol
 
 
 def _require_env(name: str) -> str:
@@ -21,19 +21,25 @@ async def test_e2e_happy_path() -> None:
     party_a_mnemonic = _require_env("TEST_PARTY_A_MNEMONIC")
 
     protocol = Protocol.from_file("tests/fixtures/transfer.tii")
-    headers = {"dmtr-api-key": api_key} if api_key else {}
-    trp = TrpClient(endpoint=endpoint, headers=headers)
     signer = CardanoSigner.from_mnemonic(address=party_a_address, phrase=party_a_mnemonic)
 
     party_b_address = os.getenv("TEST_PARTY_B_ADDRESS", party_a_address)
     _party_b_mnemonic = os.getenv("TEST_PARTY_B_MNEMONIC", party_a_mnemonic)
 
-    client = (
-        Tx3Client(protocol, trp)
+    builder = (
+        protocol.client()
+        .trp_endpoint(endpoint)
         .with_profile("preprod")
-        .with_party("sender", Party.signer(signer))
+    )
+
+    if api_key:
+        builder = builder.with_header("dmtr-api-key", api_key)
+
+    client = (
+        builder.with_party("sender", Party.signer(signer))
         .with_party("receiver", Party.address(party_b_address))
         .with_party("middleman", Party.address(party_b_address))
+        .build()
     )
 
     submitted = await (
@@ -44,5 +50,3 @@ async def test_e2e_happy_path() -> None:
 
     status = await submitted.wait_for_confirmed(PollConfig.default())
     assert status.stage.value in {"confirmed", "finalized"}
-
-    await trp.close()
