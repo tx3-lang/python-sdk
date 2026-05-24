@@ -54,15 +54,16 @@ class _StubSigner:
 
 def _client(trp: _RecordingTrp, *, with_signer: bool = False) -> Tx3Client:
     protocol = Protocol.from_file("tests/fixtures/transfer.tii")
-    client = Tx3Client(protocol, trp)
+    builder = protocol.client()._trp_client(trp)
     if with_signer:
         registered = vkey_witness("11", "22")
-        client = client.with_party("sender", Party.signer(_StubSigner("addr_sender", registered)))
+        builder = builder.with_party("sender", Party.signer(_StubSigner("addr_sender", registered)))
     else:
-        client = client.with_party("sender", Party.address("addr_sender"))
+        builder = builder.with_party("sender", Party.address("addr_sender"))
     return (
-        client.with_party("receiver", Party.address("addr_receiver"))
+        builder.with_party("receiver", Party.address("addr_receiver"))
         .with_party("middleman", Party.address("addr_middleman"))
+        .build()
     )
 
 

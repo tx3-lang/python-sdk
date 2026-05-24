@@ -102,6 +102,18 @@ class Protocol:
         """Returns the profile map from the protocol."""
         return dict(self._spec["profiles"])
 
+    def client(self) -> "Tx3ClientBuilder":  # noqa: F821 — forward ref
+        """Returns a fresh `Tx3ClientBuilder` seeded with this protocol.
+
+        Entry point for the dynamic flow — pairs with the codegen-flow
+        `Tx3ClientBuilder.from_parts(...)`.
+        """
+        # Local import to avoid a load-time cycle: clientBuilder imports
+        # Protocol (type-only at runtime via `from_protocol` signature).
+        from tx3_sdk.facade.client_builder import Tx3ClientBuilder
+
+        return Tx3ClientBuilder.from_protocol(self)
+
     def invoke(self, tx_name: str, profile: str | None = None) -> Invocation:
         """Creates an invocation model for a known transaction name."""
         tx = self._spec["transactions"].get(tx_name)
