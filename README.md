@@ -27,37 +27,36 @@ pip install tx3-sdk
 ```python
 import asyncio
 
-from tx3_sdk import CardanoSigner, Party, PollConfig, Protocol, TrpClient, Tx3Client
+from tx3_sdk import CardanoSigner, Party, PollConfig, Protocol
 
 
 async def main() -> None:
     # 1) Load a compiled .tii protocol
     protocol = Protocol.from_file("examples/transfer.tii")
 
-    # 2) Create a low-level TRP client
-    trp = TrpClient(endpoint="https://preprod.trp.tx3.dev")
-
-    # 3) Configure signer and parties
+    # 2) Build a client: configure TRP, profile, and parties on the builder
     sender_signer = CardanoSigner.from_mnemonic(
         address="addr_test1qz...",
         phrase="word1 word2 ... word24",
     )
 
     client = (
-        Tx3Client(protocol, trp)
+        protocol.client()
+        .trp_endpoint("https://preprod.trp.tx3.dev")
         .with_profile("preprod")
         .with_party("sender", Party.signer(sender_signer))
         .with_party("receiver", Party.address("addr_test1qz..."))
+        .build()
     )
 
-    # 4) Build, resolve, sign, submit
+    # 3) Build, resolve, sign, submit
     submitted = await (
         await (
             await client.tx("transfer").arg("quantity", 10_000_000).resolve()
         ).sign()
     ).submit()
 
-    # 5) Wait for confirmation
+    # 4) Wait for confirmation
     status = await submitted.wait_for_confirmed(PollConfig.default())
     print(f"Confirmed at stage: {status.stage}")
 
@@ -65,14 +64,24 @@ async def main() -> None:
 asyncio.run(main())
 ```
 
+All fallible validation — TRP endpoint present, profile declared, every bound
+party declared — happens inside `build()`, which raises `MissingTrpEndpointError`,
+`UnknownProfileError`, or `UnknownPartyError` (all under the `BuilderError` family,
+rooted at `Tx3Error`). Optional setters never raise, so chains stay fluent. Profile
+selection is **builder-only**: there is no profile-switching method on the built
+client. Switching profiles requires a new builder.
+
 ## Concepts
 
 | SDK Type | Glossary Term | Description |
 |---|---|---|
-| `Protocol` | TII / Protocol | Loaded `.tii` with transactions, parties, and profiles |
-| `Tx3Client` | Facade | High-level client holding protocol + TRP + party bindings |
-| `TxBuilder` | Invocation builder | Collects args and resolves transactions |
+| `Protocol` | TII / Protocol | Loaded `.tii` with transactions, parties, and profiles. `protocol.client()` returns a fresh `Tx3ClientBuilder` |
+| `Tx3ClientBuilder` | Client builder | Fluent builder seeded by `Protocol.client()` or `Tx3ClientBuilder.from_parts(...)`; absorbs all fallible validation in `build()` |
+| `Tx3Client` | Facade | Output of `Tx3ClientBuilder.build()` — owns the deconstructed protocol parts, TRP client, profile, and party bindings |
+| `TxBuilder` | Invocation builder | Source-agnostic; collects args and resolves transactions |
 | `Party` | Party | `Party.address(...)` or `Party.signer(...)` |
+| `Profile` | Profile | `{ environment, parties }` value baked into the client; embedded by codegen plugins, decomposed from `Protocol` by `from_protocol` |
+| `MissingTrpEndpointError` / `UnknownPartyError` | Builder errors | Raised by `build()`; subclass of `BuilderError`, rooted at `Tx3Error` |
 | `Signer` | Signer | Protocol producing a `TxWitness` for a `SignRequest` |
 | `SignRequest` | SignRequest | Input passed to `Signer.sign`: `tx_hash_hex` + `tx_cbor_hex` |
 | `CardanoSigner` | Cardano Signer | BIP32-Ed25519 signer at `m/1852'/1815'/0'/0/0` |
@@ -83,6 +92,26 @@ asyncio.run(main())
 | `PollConfig` | Poll configuration | Poll attempts and delay for wait modes |
 
 ## Advanced usage
+
+### Skipping the runtime `.tii` (codegen flow)
+
+If you've run `trix codegen` to generate typed bindings, your generated `Client`
+embeds the per-transaction TIR envelopes and per-profile data at codegen time —
+no `.tii` artifact at runtime. Under the hood it seeds the same builder via
+`Tx3ClientBuilder.from_parts(transactions, profiles, known_parties)` and routes
+typed per-party setters through `with_party_unchecked`. You can also call
+`from_parts` directly from hand-written code:
+
+```python
+from tx3_sdk import ClientOptions, Party, Tx3ClientBuilder
+
+client = (
+    Tx3ClientBuilder.from_parts(transactions, profiles, ["sender", "receiver"])
+    .trp(ClientOptions(endpoint="http://localhost:8000"))
+    .with_party_unchecked("sender", Party.signer(signer))
+    .build()
+)
+```
 
 ### Low-level TRP client
 

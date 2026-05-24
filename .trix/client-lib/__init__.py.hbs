@@ -5,11 +5,18 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any
 
+from tx3_sdk import (
+    Party,
+    Profile as SdkProfile,
+    Tx3Client,
+    Tx3ClientBuilder,
+)
 from tx3_sdk.core.bytes import TirEnvelope
-from tx3_sdk.trp.client import TrpClient
-from tx3_sdk.trp.spec import ResolveParams, SubmitParams, SubmitResponse, TxEnvelope
+from tx3_sdk.facade.builder import TxBuilder
+from tx3_sdk.trp.client import ClientOptions
 
 PROTOCOL_NAME = "{{tii.protocol.name}}"
 PROTOCOL_VERSION = "{{tii.protocol.version}}"
@@ -22,13 +29,13 @@ ENVIRONMENT_SCHEMA: dict[str, Any] = json.loads(
 )
 
 {{/if}}
-# Profiles embedded from the TII, keyed by name. Each value carries that
-# profile's `environment` values and `parties` addresses.
-PROFILES: dict[str, dict[str, Any]] = json.loads(
-    """{{{json tii.profiles}}}"""
+{{#each tii.transactions}}
+{{constantCase @key}}_TIR = TirEnvelope(
+    content="{{tir.content}}",
+    encoding="{{tir.encoding}}",
+    version="{{tir.version}}",
 )
 
-{{#each tii.transactions}}
 @dataclass
 class {{pascalCase @key}}Params:
     """Arguments for the {{@key}} transaction."""
@@ -38,51 +45,83 @@ class {{pascalCase @key}}Params:
 {{/each}}
 
 
-{{constantCase @key}}_TIR = TirEnvelope(
-    content="{{tir.content}}",
-    encoding="{{tir.encoding}}",
-    version="{{tir.version}}",
-)
-
 {{/each}}
+{{#if tii.profiles}}
+{{#each tii.profiles}}
+_{{constantCase @key}}_PROFILE = SdkProfile(
+    environment=json.loads("""{{{json this.environment}}}"""),
+    parties=json.loads("""{{{json this.parties}}}"""),
+)
+{{/each}}
+
+
+class Profile(str, Enum):
+    """Profiles declared by the protocol. Required argument to `Client`."""
+
+{{#each tii.profiles}}
+    {{constantCase @key}} = "{{@key}}"
+{{/each}}
+
+
+{{/if}}
 class Client:
-    """Thin protocol facade over the TRP client."""
+    """Typed protocol client exposing the full transaction lifecycle.
+
+    Wraps the runtime SDK's `Tx3Client` — all lifecycle state, party storage,
+    resolve/sign/submit/wait, and error handling live in the SDK. This wrapper
+    only adds the typed shape of per-transaction methods, per-party setters,
+    and the embedded protocol fragments.
+    """
 
     def __init__(
         self,
-        endpoint: str,
-        headers: dict[str, str] | None = None,
-        profile: str | None = None,
+        options: ClientOptions,
+{{#if tii.profiles}}
+        profile: Profile,
+{{/if}}
     ) -> None:
-        self._trp = TrpClient(endpoint=endpoint, headers=headers)
-        self._environment: dict[str, Any] | None = None
-        self._parties: dict[str, str] = {}
-        if profile is not None:
-            if profile not in PROFILES:
-                raise ValueError(f"unknown profile {profile!r}")
-            selected = PROFILES[profile]
-            self._environment = selected.get("environment") or None
-            self._parties = selected.get("parties") or {}
-
-    async def _resolve(self, tir: TirEnvelope, args: dict[str, Any]) -> TxEnvelope:
-        merged: dict[str, Any] = {**self._parties, **args}
-        return await self._trp.resolve(
-            ResolveParams(tir=tir, args=merged, env=self._environment)
-        )
+        transactions: dict[str, TirEnvelope] = {
 {{#each tii.transactions}}
+            "{{@key}}": {{constantCase @key}}_TIR,
+{{/each}}
+        }
+{{#if tii.profiles}}
+        profiles: dict[str, SdkProfile] = {
+{{#each tii.profiles}}
+            "{{@key}}": _{{constantCase @key}}_PROFILE,
+{{/each}}
+        }
+{{else}}
+        profiles: dict[str, SdkProfile] = {}
+{{/if}}
 
-    async def {{snakeCase @key}}(self, args: {{pascalCase @key}}Params) -> TxEnvelope:
-        """Resolves the {{@key}} transaction."""
-        return await self._resolve(
-            {{constantCase @key}}_TIR,
+        builder = Tx3ClientBuilder.from_parts(transactions, profiles, [])
+        builder = builder.trp(options)
+{{#if tii.profiles}}
+        builder = builder.with_profile(profile.value)
+{{/if}}
+        self._inner: Tx3Client = builder.build()
+
+{{#each tii.parties}}
+    def with_{{snakeCase @key}}(self, party: Party) -> "Client":
+        """Binds the `{{@key}}` party. Overrides any address declared for that
+        party by the selected profile.
+        """
+        self._inner = self._inner.with_party_unchecked("{{@key}}", party)
+        return self
+
+{{/each}}
+{{#each tii.transactions}}
+    def {{snakeCase @key}}(self, args: {{pascalCase @key}}Params) -> TxBuilder:
+        """Builds the `{{@key}}` transaction. Drive the returned builder with
+        `.resolve()` and the rest of the lifecycle chain.
+        """
+        return self._inner.tx("{{@key}}").args(
             {
 {{#each params.properties}}
                 "{{@key}}": args.{{snakeCase @key}},
 {{/each}}
-            },
+            }
         )
-{{/each}}
 
-    async def submit(self, params: SubmitParams) -> SubmitResponse:
-        """Submits a signed transaction to the network."""
-        return await self._trp.submit(params)
+{{/each}}

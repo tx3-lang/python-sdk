@@ -2,10 +2,29 @@
 
 from __future__ import annotations
 
-from tx3_sdk.errors import PollingError, ResolutionError, SubmissionError
+from tx3_sdk.errors import (
+    PollingError,
+    ResolutionError,
+    SubmissionError,
+    Tx3Error,
+)
 
 
-class UnknownPartyError(ResolutionError):
+class BuilderError(Tx3Error):
+    """Errors raised by `Tx3ClientBuilder.build()` and late-binding setters
+    on the built `Tx3Client`. Discriminate the group via `except BuilderError`,
+    or pick a specific subclass.
+    """
+
+
+class MissingTrpEndpointError(BuilderError):
+    """Raised when `Tx3ClientBuilder.build()` runs without a TRP endpoint."""
+
+    def __init__(self) -> None:
+        super().__init__("TRP endpoint not configured")
+
+
+class UnknownPartyError(BuilderError):
     """Raised when a configured party is absent from protocol parties."""
 
     def __init__(self, name: str) -> None:

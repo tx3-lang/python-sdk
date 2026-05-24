@@ -1,70 +1,78 @@
-"""Invocation builder for resolve step of facade flow."""
+"""Source-agnostic transaction invocation builder."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Iterable
 
 from tx3_sdk.core.args import coerce_arg, normalize_arg_key
-from tx3_sdk.facade.errors import MissingParamsError, UnknownArgError, UnknownPartyError
+from tx3_sdk.core.bytes import TirEnvelope
 from tx3_sdk.facade.party import Party
 from tx3_sdk.facade.resolved import ResolvedTx
 from tx3_sdk.signer.signer import Signer
-from tx3_sdk.tii.errors import MissingParamsError as TiiMissingParamsError
-from tx3_sdk.tii.protocol import Protocol
-from tx3_sdk.trp.client import TrpClient
 from tx3_sdk.trp.spec import ResolveParams
 
 
-@dataclass
 class TxBuilder:
-    """Collects args and resolves a transaction through TRP."""
+    """Builder for transaction invocation.
 
-    protocol: Protocol
-    trp: TrpClient
-    tx_name: str
-    parties: dict[str, Party]
-    profile: str | None = None
-    _args: dict[str, Any] = field(default_factory=dict)
+    Holds the resolve inputs directly: the TIR envelope, the environment values
+    from the selected profile (with builder-supplied overrides already folded
+    in), the bound parties, and the typed args. Drives a single `resolve()`
+    path regardless of whether the upstream was a runtime-loaded `Protocol` or
+    codegen-embedded fragments.
+    """
+
+    def __init__(self, trp: Any, tir: TirEnvelope) -> None:
+        self._trp = trp
+        self._tir = tir
+        self._env: dict[str, Any] = {}
+        self._parties: dict[str, Party] = {}
+        self._args: dict[str, Any] = {}
+
+    def env(self, env: dict[str, Any]) -> "TxBuilder":
+        """Sets the environment values applied to this transaction."""
+        self._env = dict(env)
+        return self
+
+    def parties(
+        self, parties: Iterable[tuple[str, Party]] | dict[str, Party]
+    ) -> "TxBuilder":
+        """Attaches party definitions (case-insensitive names)."""
+        items = parties.items() if isinstance(parties, dict) else parties
+        for name, party in items:
+            self._parties[name.lower()] = party
+        return self
 
     def arg(self, name: str, value: Any) -> "TxBuilder":
-        """Sets one arg by key, with case-insensitive key matching."""
+        """Adds a single argument (case-insensitive name)."""
         self._args[normalize_arg_key(name)] = coerce_arg(value)
         return self
 
     def args(self, values: dict[str, Any]) -> "TxBuilder":
-        """Sets multiple args at once."""
+        """Adds multiple arguments at once."""
         for key, value in values.items():
             self.arg(key, value)
         return self
 
     async def resolve(self) -> ResolvedTx:
-        """Resolves this invocation via TRP and returns a `ResolvedTx`."""
-        invocation = self.protocol.invoke(self.tx_name, self.profile)
-        protocol_parties = {key.lower() for key in self.protocol.parties.keys()}
+        """Resolves the transaction through the TRP client."""
+        merged: dict[str, Any] = {}
+        merged.update(self._env)
+        for name, party in self._parties.items():
+            merged[name] = party.party_address()
+        merged.update(self._args)
+
+        envelope = await self._trp.resolve(
+            ResolveParams(tir=self._tir, args=merged)
+        )
 
         signers: list[tuple[str, Signer]] = []
-        for name, party in self.parties.items():
-            if name.lower() not in protocol_parties:
-                raise UnknownPartyError(name)
-            invocation.set_arg(name, party.party_address())
+        for name, party in self._parties.items():
             if party.is_signer and party.signer_impl is not None:
                 signers.append((name, party.signer_impl))
 
-        param_keys = {name.lower() for name in invocation.params.keys()}
-        for key, value in self._args.items():
-            if key not in param_keys:
-                raise UnknownArgError(key)
-            invocation.set_arg(key, value)
-
-        try:
-            tir, args = invocation.into_resolve_request()
-        except TiiMissingParamsError as exc:
-            raise MissingParamsError(exc.params) from exc
-
-        envelope = await self.trp.resolve(ResolveParams(tir=tir, args=args))
         return ResolvedTx(
-            trp=self.trp,
+            trp=self._trp,
             hash=envelope.hash,
             tx_hex=envelope.tx,
             signers=signers,
