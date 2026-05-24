@@ -8,6 +8,7 @@
 # requirements.txt pins installed — no editable install of the SDK source tree.
 #
 # Requires `tx3c` and `python` on PATH.
+# Last verified against fleet v0.12.0 (unified Tx3ClientBuilder).
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
