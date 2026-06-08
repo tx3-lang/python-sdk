@@ -29,6 +29,11 @@ ENVIRONMENT_SCHEMA: dict[str, Any] = json.loads(
 )
 
 {{/if}}
+{{#if tii.components.schemas}}
+# Named types for the protocol's custom (record / variant) types.
+{{{componentTypes tii.components.schemas "python"}}}
+
+{{/if}}
 {{#each tii.transactions}}
 {{constantCase @key}}_TIR = TirEnvelope(
     content="{{tir.content}}",
