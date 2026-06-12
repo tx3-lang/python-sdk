@@ -15,7 +15,7 @@ from tx3_sdk.tii.errors import (
     UnknownTxError,
 )
 from tx3_sdk.tii.invocation import Invocation
-from tx3_sdk.tii.param_type import ParamType, param_type_from_schema
+from tx3_sdk.tii.param_type import ParamKind, ParamType, param_type_from_schema
 
 
 @dataclass(frozen=True)
@@ -128,11 +128,33 @@ class Protocol:
         if not isinstance(properties, dict):
             raise InvalidParamsSchemaError("params.properties must be an object")
 
+        components = {}
+        components_spec = self._spec.get("components")
+        if isinstance(components_spec, dict):
+            schemas = components_spec.get("schemas")
+            if isinstance(schemas, dict):
+                components = schemas
+
         params: dict[str, ParamType] = {}
+
+        # Party addresses are implicit Address params.
+        for party in self._spec["parties"]:
+            params[str(party).lower()] = ParamType(ParamKind.ADDRESS)
+
+        # Protocol-level environment params.
+        environment = self._spec.get("environment")
+        if isinstance(environment, dict):
+            env_props = environment.get("properties")
+            if isinstance(env_props, dict):
+                for key, schema in env_props.items():
+                    if isinstance(schema, dict):
+                        params[key] = param_type_from_schema(schema, components)
+
+        # Transaction params.
         for key, schema in properties.items():
             if not isinstance(schema, dict):
                 raise InvalidParamsSchemaError(f"param schema for {key} must be an object")
-            params[key] = param_type_from_schema(schema)
+            params[key] = param_type_from_schema(schema, components)
 
         required_raw = params_schema.get("required", [])
         if not isinstance(required_raw, list):

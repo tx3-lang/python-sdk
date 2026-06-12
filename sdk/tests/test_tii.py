@@ -3,7 +3,14 @@ from pathlib import Path
 
 import pytest
 
-from tx3_sdk.tii import InvalidJsonError, MissingParamsError, Protocol, UnknownProfileError, UnknownTxError
+from tx3_sdk.tii import (
+    InvalidJsonError,
+    MissingParamsError,
+    ParamKind,
+    Protocol,
+    UnknownProfileError,
+    UnknownTxError,
+)
 
 
 def test_protocol_from_file() -> None:
@@ -60,3 +67,41 @@ def test_missing_params_detected() -> None:
     invocation = protocol.invoke("transfer")
     with pytest.raises(MissingParamsError):
         invocation.into_resolve_request()
+
+
+def test_invoke_interprets_complex_params() -> None:
+    """Locks in the ``Protocol.invoke`` path the unit tests can't reach: threading
+    ``components`` into ``param_type_from_schema``, and exposing party (Address)
+    and environment-schema params. Asserts a real ``complex.tii`` produces the
+    expected compound kinds, including a component-``$ref`` Record and Variant."""
+    protocol = Protocol.from_file("tests/fixtures/complex.tii")
+    params = protocol.invoke("complex").params
+
+    want_kind = {
+        "quantity": ParamKind.INTEGER,
+        "flag": ParamKind.BOOLEAN,
+        "nothing": ParamKind.UNIT,
+        "recipient": ParamKind.ADDRESS,
+        "source": ParamKind.UTXO_REF,
+        "bag": ParamKind.ANY_ASSET,
+        "amounts": ParamKind.LIST,
+        "pair": ParamKind.TUPLE,
+        "labels": ParamKind.MAP,
+        "asset": ParamKind.RECORD,
+        "side": ParamKind.VARIANT,
+        # Parties surface as implicit Address params (lowercased).
+        "sender": ParamKind.ADDRESS,
+        "receiver": ParamKind.ADDRESS,
+        # Protocol-level environment schema params.
+        "fee": ParamKind.INTEGER,
+    }
+    for name, kind in want_kind.items():
+        assert name in params, f"missing param {name!r}"
+        assert params[name].kind is kind, f"param {name!r}: {params[name].kind} != {kind}"
+
+    # The component-$ref Record must have resolved its inner Bytes field — this is
+    # the assertion that actually guards the components threading.
+    assert params["asset"].fields["policy"].kind is ParamKind.BYTES
+
+    # The component-$ref Variant must have resolved its cases.
+    assert len(params["side"].cases) == 2
