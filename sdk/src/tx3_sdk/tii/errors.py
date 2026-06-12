@@ -27,10 +27,6 @@ class InvalidParamsSchemaError(TiiError):
     """Raised when params schema is malformed."""
 
 
-class InvalidParamTypeError(TiiError):
-    """Raised when a parameter type cannot be mapped to supported types."""
-
-
 class MissingParamsError(TiiError):
     """Raised when invocation is missing required parameters."""
 

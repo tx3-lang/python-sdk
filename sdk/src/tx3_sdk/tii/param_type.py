@@ -65,16 +65,7 @@ def param_type_from_schema(
 
     ref = schema.get("$ref")
     if isinstance(ref, str):
-        prefix = "#/components/schemas/"
-        if ref.startswith(prefix):
-            resolved = components.get(ref[len(prefix) :])
-            if isinstance(resolved, dict):
-                return param_type_from_schema(resolved, components)
-            return ParamType(ParamKind.UNKNOWN, schema=schema)
-        kind = _core_kind_from_ref(ref)
-        if kind is not None:
-            return ParamType(kind)
-        return ParamType(ParamKind.UNKNOWN, schema=schema)
+        return _ref_type(schema, ref, components)
 
     one_of = schema.get("oneOf")
     if isinstance(one_of, list):
@@ -91,36 +82,68 @@ def param_type_from_schema(
     if schema_type == "null":
         return ParamType(ParamKind.UNIT)
     if schema_type == "array":
-        prefix_items = schema.get("prefixItems")
-        if isinstance(prefix_items, list):
-            elements = tuple(
-                param_type_from_schema(el, components)
-                for el in prefix_items
-                if isinstance(el, dict)
-            )
-            return ParamType(ParamKind.TUPLE, elements=elements)
-        items = schema.get("items")
-        if isinstance(items, dict):
-            return ParamType(
-                ParamKind.LIST, inner=param_type_from_schema(items, components)
-            )
-        return ParamType(ParamKind.UNKNOWN, schema=schema)
+        return _array_type(schema, components)
     if schema_type == "object":
-        additional = schema.get("additionalProperties")
-        if isinstance(additional, dict):
-            return ParamType(
-                ParamKind.MAP, inner=param_type_from_schema(additional, components)
-            )
-        properties = schema.get("properties")
-        if isinstance(properties, dict):
-            fields = {
-                str(key): param_type_from_schema(value, components)
-                for key, value in properties.items()
-                if isinstance(value, dict)
-            }
-            return ParamType(ParamKind.RECORD, fields=fields)
-        return ParamType(ParamKind.UNKNOWN, schema=schema)
+        return _object_type(schema, components)
 
+    return ParamType(ParamKind.UNKNOWN, schema=schema)
+
+
+def _ref_type(
+    schema: dict[str, object], ref: str, components: dict[str, dict[str, object]]
+) -> ParamType:
+    """Interprets a ``$ref`` node: a ``#/components/schemas/<Name>`` reference
+    resolves against ``components`` (recursing), a core ``$ref`` maps by trailing
+    name, anything else falls back to ``UNKNOWN``."""
+    prefix = "#/components/schemas/"
+    if ref.startswith(prefix):
+        resolved = components.get(ref[len(prefix) :])
+        if isinstance(resolved, dict):
+            return param_type_from_schema(resolved, components)
+        return ParamType(ParamKind.UNKNOWN, schema=schema)
+    kind = _core_kind_from_ref(ref)
+    if kind is not None:
+        return ParamType(kind)
+    return ParamType(ParamKind.UNKNOWN, schema=schema)
+
+
+def _array_type(
+    schema: dict[str, object], components: dict[str, dict[str, object]]
+) -> ParamType:
+    """Interprets an ``array`` schema: ``prefixItems`` → ``TUPLE``, ``items`` →
+    ``LIST``, neither → ``UNKNOWN``."""
+    prefix_items = schema.get("prefixItems")
+    if isinstance(prefix_items, list):
+        elements = tuple(
+            param_type_from_schema(el, components)
+            for el in prefix_items
+            if isinstance(el, dict)
+        )
+        return ParamType(ParamKind.TUPLE, elements=elements)
+    items = schema.get("items")
+    if isinstance(items, dict):
+        return ParamType(ParamKind.LIST, inner=param_type_from_schema(items, components))
+    return ParamType(ParamKind.UNKNOWN, schema=schema)
+
+
+def _object_type(
+    schema: dict[str, object], components: dict[str, dict[str, object]]
+) -> ParamType:
+    """Interprets an ``object`` schema: ``additionalProperties`` → ``MAP``,
+    ``properties`` → ``RECORD``, neither → ``UNKNOWN``."""
+    additional = schema.get("additionalProperties")
+    if isinstance(additional, dict):
+        return ParamType(
+            ParamKind.MAP, inner=param_type_from_schema(additional, components)
+        )
+    properties = schema.get("properties")
+    if isinstance(properties, dict):
+        fields = {
+            str(key): param_type_from_schema(value, components)
+            for key, value in properties.items()
+            if isinstance(value, dict)
+        }
+        return ParamType(ParamKind.RECORD, fields=fields)
     return ParamType(ParamKind.UNKNOWN, schema=schema)
 
 

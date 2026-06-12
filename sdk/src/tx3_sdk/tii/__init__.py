@@ -2,7 +2,6 @@
 
 from tx3_sdk.tii.errors import (
     InvalidJsonError,
-    InvalidParamTypeError,
     InvalidParamsSchemaError,
     MissingParamsError,
     UnknownProfileError,
@@ -14,7 +13,6 @@ from tx3_sdk.tii.protocol import Protocol
 
 __all__ = [
     "InvalidJsonError",
-    "InvalidParamTypeError",
     "InvalidParamsSchemaError",
     "Invocation",
     "MissingParamsError",
