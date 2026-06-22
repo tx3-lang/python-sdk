@@ -1,6 +1,8 @@
 """TII protocol loading and invocation helpers."""
 
+from tx3_sdk.tii.encode import encode
 from tx3_sdk.tii.errors import (
+    EncodeArgError,
     InvalidJsonError,
     InvalidParamsSchemaError,
     MissingParamsError,
@@ -12,6 +14,7 @@ from tx3_sdk.tii.param_type import ParamKind, ParamType, VariantCase
 from tx3_sdk.tii.protocol import Protocol
 
 __all__ = [
+    "EncodeArgError",
     "InvalidJsonError",
     "InvalidParamsSchemaError",
     "Invocation",
@@ -22,4 +25,5 @@ __all__ = [
     "UnknownProfileError",
     "UnknownTxError",
     "VariantCase",
+    "encode",
 ]

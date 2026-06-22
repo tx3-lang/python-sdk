@@ -138,13 +138,36 @@ def _object_type(
         )
     properties = schema.get("properties")
     if isinstance(properties, dict):
-        fields = {
-            str(key): param_type_from_schema(value, components)
-            for key, value in properties.items()
-            if isinstance(value, dict)
-        }
-        return ParamType(ParamKind.RECORD, fields=fields)
+        return ParamType(ParamKind.RECORD, fields=_record_fields(schema, properties, components))
     return ParamType(ParamKind.UNKNOWN, schema=schema)
+
+
+def _record_fields(
+    schema: dict[str, object],
+    properties: dict[str, object],
+    components: dict[str, dict[str, object]],
+) -> dict[str, ParamType]:
+    """Builds record fields in **declared order**: the schema's ``required`` array
+    first (the order ``tx3c`` emits, = source declaration), then any remaining
+    ``properties`` (which JSON alphabetizes). Python dicts preserve insertion
+    order, so the resulting field order drives the positional ``struct`` wire form
+    the encoder produces."""
+    fields: dict[str, ParamType] = {}
+
+    required = schema.get("required")
+    if isinstance(required, list):
+        for name in required:
+            key = str(name)
+            value = properties.get(key)
+            if isinstance(value, dict):
+                fields[key] = param_type_from_schema(value, components)
+
+    for key, value in properties.items():
+        skey = str(key)
+        if skey not in fields and isinstance(value, dict):
+            fields[skey] = param_type_from_schema(value, components)
+
+    return fields
 
 
 def _variant_case(
