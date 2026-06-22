@@ -7,6 +7,7 @@ from typing import Any
 
 from tx3_sdk.core.args import normalize_arg_key
 from tx3_sdk.core.bytes import TirEnvelope
+from tx3_sdk.tii.encode import encode
 from tx3_sdk.tii.errors import MissingParamsError
 from tx3_sdk.tii.param_type import ParamType
 
@@ -38,8 +39,23 @@ class Invocation:
         return missing
 
     def into_resolve_request(self) -> tuple[TirEnvelope, dict[str, Any]]:
-        """Converts invocation into the TRP resolve payload."""
+        """Converts invocation into the TRP resolve payload.
+
+        Every mapped arg is marshalled by its ``.tii`` :class:`ParamType`:
+        top-level scalars come back bare (coerced server-side via the flat TIR
+        type), aggregates come back tagged in the self-describing ``TaggedArg``
+        wire form. An unmapped arg has no type, so it passes through untouched.
+        Arg keys are lowercased on set; params keep their original case, so match
+        case-insensitively.
+        """
         missing = self.unspecified_params()
         if missing:
             raise MissingParamsError(missing)
-        return self.tir, self.args
+
+        params_by_key = {name.lower(): ty for name, ty in self.params.items()}
+        args: dict[str, Any] = {}
+        for key, value in self.args.items():
+            param = params_by_key.get(key.lower())
+            args[key] = encode(param, value) if param is not None else value
+
+        return self.tir, args

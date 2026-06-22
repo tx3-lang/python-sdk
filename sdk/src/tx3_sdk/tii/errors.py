@@ -33,3 +33,13 @@ class MissingParamsError(TiiError):
     def __init__(self, params: list[str]) -> None:
         super().__init__(f"missing required params: {params}")
         self.params = params
+
+
+class EncodeArgError(TiiError):
+    """Raised when a complex argument value does not match its declared
+    :class:`~tx3_sdk.tii.param_type.ParamType`.
+
+    Surfaced **before** the request is sent (the SDK is authoritative for complex
+    types), so a malformed complex arg fails fast at the client rather than as an
+    opaque resolver error.
+    """
