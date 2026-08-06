@@ -97,3 +97,49 @@ def test_unit_lowers_to_nullary_struct() -> None:
     assert encode(param_type_from_schema({"type": "null"}), None) == {
         "struct": {"constructor": 0, "fields": []}
     }
+
+
+BYTES_SCHEMA = {"$ref": "https://tx3.land/specs/v1beta0/tii#/$defs/Bytes"}
+LIST_OF_BYTES_SCHEMA = {"type": "array", "items": BYTES_SCHEMA}
+
+
+def test_native_byte_arrays_canonicalize_to_hex() -> None:
+    # A native byte array (`bytes`, or an integer list — the JSON shape other
+    # SDKs' native byte arrays serialize to) canonicalizes to 0x-prefixed hex
+    # (regression: TRP `(-32005) value is not bytes: [1,1]`).
+    bytes_param = param_type_from_schema(BYTES_SCHEMA)
+    assert encode(bytes_param, b"\x01\x01") == "0x0101"
+    assert encode(bytes_param, bytearray(b"\x01\x01")) == "0x0101"
+    assert encode(bytes_param, [1, 1]) == "0x0101"
+
+    list_param = param_type_from_schema(LIST_OF_BYTES_SCHEMA)
+    assert encode(list_param, [b"\x01\x02"]) == {"list": [{"bytes": "0x0102"}]}
+
+
+def test_rejects_non_byte_arrays_for_bytes() -> None:
+    bytes_param = param_type_from_schema(BYTES_SCHEMA)
+    for bad in ([1, 256], [1, -1], ["aa", 1], [True], 42):
+        with pytest.raises(EncodeArgError):
+            encode(bytes_param, bad)
+
+
+def test_hydra_init_arg_shapes() -> None:
+    # Hydra `init`: `participants` / `parties` are `List<Bytes>`, `head_id` is
+    # `Bytes` (regression: `(-32005) target type not supported: List` /
+    # `value is not bytes: [1,2]`).
+    list_param = param_type_from_schema(LIST_OF_BYTES_SCHEMA)
+    assert encode(list_param, ["0102", "0304"]) == {
+        "list": [{"bytes": "0102"}, {"bytes": "0304"}]
+    }
+    assert encode(list_param, [b"\x01\x02"]) == {"list": [{"bytes": "0x0102"}]}
+
+    bytes_param = param_type_from_schema(BYTES_SCHEMA)
+    assert encode(bytes_param, "abcd0123") == "abcd0123"
+
+
+def test_asteria_name_arg_shapes() -> None:
+    # Asteria `create_ship`: `ship_name` / `pilot_name` are `Bytes` params
+    # (regression: `(-32005) value is not bytes: [1,1]`).
+    bytes_param = param_type_from_schema(BYTES_SCHEMA)
+    assert encode(bytes_param, "53484950313233") == "53484950313233"
+    assert encode(bytes_param, b"SHIP") == "0x53484950"

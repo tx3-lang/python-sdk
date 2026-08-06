@@ -46,6 +46,19 @@ def _wrong_shape(kind: str, expected: str, value: Any) -> EncodeArgError:
     )
 
 
+def _as_byte_array(value: Any) -> bytes | None:
+    """Interprets a value as a raw byte array: ``bytes``/``bytearray``, or a
+    list whose every element is an integer in ``0..=255``. ``None`` if it is
+    neither."""
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value)
+    if isinstance(value, list) and all(
+        isinstance(b, int) and not isinstance(b, bool) and 0 <= b <= 255 for b in value
+    ):
+        return bytes(value)
+    return None
+
+
 def _leaf(tag: str, value: Any, nested: bool) -> Any:
     """Renders a scalar leaf: bare at the top level (the resolver knows the
     param's flat type), tagged when nested inside an aggregate (it doesn't)."""
@@ -88,7 +101,14 @@ def _marshal(param: ParamType, value: Any, nested: bool) -> Any:
         # Hex string or a BytesEnvelope object.
         if isinstance(value, (str, dict)):
             return _leaf("bytes", value, nested)
-        raise _wrong_shape("bytes", "hex string or bytes envelope", value)
+        # A native byte array (`bytes`/`bytearray`, or an integer list — the
+        # JSON shape other SDKs' native byte arrays serialize to) canonicalizes
+        # to 0x-prefixed hex, the wire form the resolver coerces (SDK spec
+        # §3.9).
+        raw = _as_byte_array(value)
+        if raw is not None:
+            return _leaf("bytes", f"0x{raw.hex()}", nested)
+        raise _wrong_shape("bytes", "hex string, bytes envelope, or byte array", value)
 
     if kind is ParamKind.ADDRESS:
         if isinstance(value, str):
