@@ -2,12 +2,12 @@
 #
 # CI artifact — not part of the SDK.
 #
-# Renders the .trix/client-lib codegen plugin against the shared transfer
+# Renders tx3c's built-in `python-client` template against the shared transfer
 # fixture and verifies the result the way a consumer would: the rendered module
 # is imported in a fresh venv with the dependencies its generated
 # requirements.txt pins installed — no editable install of the SDK source tree.
 #
-# Requires `tx3c` and `python` on PATH.
+# Requires `tx3c` (0.24.0 or later, which ships the built-in templates) and `python` on PATH.
 # Last verified against fleet v0.12.0 (unified Tx3ClientBuilder).
 set -euo pipefail
 
@@ -17,7 +17,7 @@ trap 'rm -rf "$gen"' EXIT
 
 tx3c codegen \
   --tii "$repo_root/sdk/tests/fixtures/transfer.tii" \
-  --template "$repo_root/.trix/client-lib" \
+  --template python-client \
   --output "$gen"
 
 for f in __init__.py requirements.txt; do
