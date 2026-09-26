@@ -29,11 +29,9 @@ ENVIRONMENT_SCHEMA: dict[str, Any] = json.loads(
 )
 
 {{/if}}
-{{#if tii.components.schemas}}
-# Named types for the protocol's custom (record / variant) types.
-{{{componentTypes tii.components.schemas "python"}}}
-
-{{/if}}
+# Named types for the protocol's custom (record / variant) types and the
+# arguments of each transaction, declared by the renderer.
+{{{declarations tii "python"}}}
 {{#each tii.transactions}}
 {{constantCase @key}}_TIR = TirEnvelope(
     content="{{tir.content}}",
@@ -41,16 +39,8 @@ ENVIRONMENT_SCHEMA: dict[str, Any] = json.loads(
     version="{{tir.version}}",
 )
 
-@dataclass
-class {{pascalCase @key}}Params:
-    """Arguments for the {{@key}} transaction."""
-
-{{#each params.properties}}
-    {{snakeCase @key}}: {{schemaTypeFor this "python"}}
 {{/each}}
 
-
-{{/each}}
 {{#if tii.profiles}}
 {{#each tii.profiles}}
 _{{constantCase @key}}_PROFILE = SdkProfile(
@@ -117,14 +107,14 @@ class Client:
 
 {{/each}}
 {{#each tii.transactions}}
-    def {{snakeCase @key}}(self, args: {{pascalCase @key}}Params) -> TxBuilder:
+    def {{snakeCase @key}}(self, args: {{paramsTypeName @key "python"}}) -> TxBuilder:
         """Builds the `{{@key}}` transaction. Drive the returned builder with
         `.resolve()` and the rest of the lifecycle chain.
         """
         return self._inner.tx("{{@key}}").args(
             {
 {{#each params.properties}}
-                "{{@key}}": args.{{snakeCase @key}},
+                "{{@key}}": args.{{identifier @key "python" "param"}},
 {{/each}}
             }
         )
